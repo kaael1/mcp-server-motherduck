@@ -20,11 +20,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Rotas que não precisam de autenticação
         public_routes = ["/health", "/docs", "/openapi.json", "/redoc"]
         
-        if request.url.path in public_routes:
+        # Normalizar path (remover trailing slash)
+        path = request.url.path.rstrip('/')
+        
+        if path in public_routes:
             return await call_next(request)
         
-        # Verificar Authorization header
-        authorization = request.headers.get("authorization")
+        # Verificar Authorization header (case insensitive)
+        authorization = request.headers.get("authorization") or request.headers.get("Authorization")
         
         if not authorization or not authorization.startswith("Bearer "):
             logger.warning(f"Missing or invalid Authorization header for {request.url.path}")
