@@ -244,6 +244,120 @@ claude mcp add-json mcp-server-motherduck '{
 - Replace `YOUR_MOTHERDUCK_TOKEN_HERE` with your actual MotherDuck token
 - Claude Code also supports environment variable expansion, so you can use `${MOTHERDUCK_TOKEN}` if you've set the environment variable
 
+## Deploy on Railway for LobeChat Integration
+
+This MCP server can be deployed on Railway to provide Excel analysis capabilities for LobeChat applications.
+
+### Prerequisites
+
+1. Railway account at [railway.app](https://railway.app)
+2. Git repository with this MCP server code
+
+### Deploy Steps
+
+1. **Fork this repository** or create your own with the MCP server code
+
+2. **Connect to Railway**:
+   - Go to [railway.app](https://railway.app)
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository
+
+3. **Configure Environment Variables**:
+   ```bash
+   # Required
+   AUTH_TOKEN=your_secret_token_here  # Generate with: openssl rand -hex 32
+   
+   # Optional (with defaults)
+   ALLOWED_ORIGINS=https://quati.ai,https://*.vercel.app
+   EXCEL_FILES_PATH=/tmp/excel_files
+   MAX_FILE_SIZE=52428800  # 50MB
+   ```
+
+4. **Deploy**: Railway will automatically build and deploy using the `railway.json` configuration
+
+### API Endpoints
+
+Once deployed, your server will provide these endpoints:
+
+#### Health Check
+```bash
+GET https://your-app.railway.app/health
+# Returns: {"status": "ok", "service": "duckdb-mcp-server", "version": "0.7.2"}
+```
+
+#### Upload Excel File
+```bash
+POST https://your-app.railway.app/upload
+Headers: Authorization: Bearer your_secret_token_here
+Body: multipart/form-data with file field
+# Returns: {"fileId": "uuid", "filename": "file.xlsx", "path": "/tmp/...", "size": 12345}
+```
+
+#### Download Result
+```bash
+GET https://your-app.railway.app/download/{fileId}
+Headers: Authorization: Bearer your_secret_token_here
+# Returns: Excel file download
+```
+
+#### MCP Endpoint
+```bash
+POST https://your-app.railway.app/mcp
+Headers: 
+  Authorization: Bearer your_secret_token_here
+  Content-Type: application/json
+Body: {"method": "tools/call", "params": {"name": "query", "arguments": {"query": "SELECT * FROM '{{file}}' LIMIT 10", "fileId": "uuid"}}}
+```
+
+### LobeChat Integration
+
+Configure your LobeChat to use this MCP server:
+
+```json
+{
+  "mcpServers": {
+    "duckdb-excel": {
+      "command": "curl",
+      "args": [
+        "-X", "POST",
+        "-H", "Authorization: Bearer your_secret_token_here",
+        "-H", "Content-Type: application/json",
+        "-d", "@-",
+        "https://your-app.railway.app/mcp"
+      ]
+    }
+  }
+}
+```
+
+### Features
+
+- **Excel Analysis**: Upload .xlsx/.xls files and query them with SQL
+- **Secure**: Bearer token authentication + CORS protection
+- **Fast**: DuckDB in-memory processing
+- **Temporary**: Files are stored in `/tmp` and cleaned on restart
+- **JSON Responses**: Structured data format for easy processing
+
+### Testing
+
+Test your deployment:
+
+```bash
+# Health check
+curl https://your-app.railway.app/health
+
+# Upload test
+curl -X POST https://your-app.railway.app/upload \
+  -H "Authorization: Bearer your_secret_token_here" \
+  -F "file=@test.xlsx"
+
+# Query test
+curl -X POST https://your-app.railway.app/mcp \
+  -H "Authorization: Bearer your_secret_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "tools/list"}'
+```
+
 ## Securing your MCP Server when querying MotherDuck
 
 If the MCP server is exposed to third parties and should only have read access to data, we recommend using a read scaling token and running the MCP server in SaaS mode.

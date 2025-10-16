@@ -1,0 +1,45 @@
+# Ignore development files
+.git/
+.gitignore
+*.md
+!README.md
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ignore test files
+tests/
+test_*.py
+*_test.py
+
+# Ignore documentation
+docs/
+*.rst
+
+# Ignore development tools
+.pre-commit-config.yaml
+.flake8
+.pylintrc
+tox.ini
+setup.cfg

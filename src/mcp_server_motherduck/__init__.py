@@ -116,9 +116,15 @@ def main(
         from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
         from collections.abc import AsyncIterator
         from starlette.applications import Starlette
-        from starlette.routing import Mount
+        from starlette.routing import Mount, Route
         from starlette.types import Receive, Scope, Send
+        from starlette.responses import JSONResponse, FileResponse
+        from fastapi import UploadFile, File, HTTPException
         import contextlib
+        import os
+        import uuid
+        import json
+        from .auth import AuthMiddleware, setup_cors, get_auth_token, get_allowed_origins
 
         logger.info("MCP server initialized in \033[32mhttp-streamable\033[0m mode")
 
@@ -134,6 +140,81 @@ def main(
             scope: Scope, receive: Receive, send: Send
         ) -> None:
             await session_manager.handle_request(scope, receive, send)
+
+        # Health check endpoint (no authentication required)
+        async def health_check(request):
+            return JSONResponse({
+                "status": "ok",
+                "service": "duckdb-mcp-server",
+                "version": SERVER_VERSION
+            })
+
+        # Upload Excel file endpoint
+        async def upload_excel(request):
+            try:
+                # Get form data
+                form = await request.form()
+                file = form.get("file")
+                
+                if not file:
+                    raise HTTPException(status_code=400, detail="No file provided")
+                
+                # Validate file format
+                if not file.filename.endswith(('.xlsx', '.xls')):
+                    raise HTTPException(status_code=400, detail="Only .xlsx and .xls files are supported")
+                
+                # Read file content
+                content = await file.read()
+                
+                # Validate file size (max 50MB)
+                max_size = int(os.getenv("MAX_FILE_SIZE", "52428800"))  # 50MB default
+                if len(content) > max_size:
+                    raise HTTPException(status_code=400, detail=f"File size exceeds {max_size // (1024*1024)}MB limit")
+                
+                # Generate unique file ID
+                file_id = str(uuid.uuid4())
+                
+                # Create directory if it doesn't exist
+                excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+                os.makedirs(excel_files_path, exist_ok=True)
+                
+                # Save file
+                file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                
+                logger.info(f"File uploaded: {file.filename} -> {file_id}")
+                
+                return JSONResponse({
+                    "fileId": file_id,
+                    "filename": file.filename,
+                    "path": file_path,
+                    "size": len(content)
+                })
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error uploading file: {e}")
+                raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+        # Download Excel file endpoint
+        async def download_excel(request):
+            file_id = request.path_params.get("file_id")
+            if not file_id:
+                raise HTTPException(status_code=400, detail="File ID is required")
+            
+            excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+            file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            return FileResponse(
+                file_path,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=f"result_{file_id}.xlsx"
+            )
 
         @contextlib.asynccontextmanager
         async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -155,10 +236,23 @@ def main(
         starlette_app = Starlette(
             debug=True,
             routes=[
+                Route("/health", endpoint=health_check, methods=["GET"]),
+                Route("/upload", endpoint=upload_excel, methods=["POST"]),
+                Route("/download/{file_id:str}", endpoint=download_excel, methods=["GET"]),
                 Mount("/mcp", app=handle_streamable_http),
             ],
             lifespan=lifespan,
         )
+
+        # Setup authentication and CORS
+        try:
+            auth_token = get_auth_token()
+            starlette_app.add_middleware(AuthMiddleware, auth_token=auth_token)
+            logger.info("Authentication middleware configured")
+        except ValueError as e:
+            logger.warning(f"Authentication not configured: {e}")
+        
+        setup_cors(starlette_app, get_allowed_origins())
 
         import uvicorn
 

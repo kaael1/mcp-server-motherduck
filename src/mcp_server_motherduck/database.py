@@ -5,6 +5,8 @@ import io
 from contextlib import redirect_stdout
 from tabulate import tabulate
 import logging
+import time
+import json
 from .configs import SERVER_VERSION
 
 logger = logging.getLogger("mcp_server_motherduck")
@@ -191,9 +193,64 @@ class DatabaseClient:
 
         return out
 
+    def _execute_json(self, query: str) -> dict:
+        """Execute query and return structured JSON response"""
+        start_time = time.time()
+        
+        if self.conn is None:
+            # open short lived readonly connection for local DuckDB, run query, close connection, return result
+            conn = duckdb.connect(
+                self.db_path,
+                config={"custom_user_agent": f"mcp-server-motherduck/{SERVER_VERSION}"},
+                read_only=self._read_only,
+            )
+            q = conn.execute(query)
+        else:
+            q = self.conn.execute(query)
+
+        # Fetch results as DataFrame
+        df = q.fetchdf()
+        
+        # Limit to 1000 rows to prevent context overflow
+        truncated = False
+        if len(df) > 1000:
+            df = df.head(1000)
+            truncated = True
+
+        execution_time = int((time.time() - start_time) * 1000)  # milliseconds
+
+        if self.conn is None:
+            conn.close()
+
+        return {
+            "success": True,
+            "data": df.to_dict(orient="records"),
+            "columns": list(df.columns),
+            "rowCount": len(df),
+            "executionTime": execution_time,
+            "truncated": truncated,
+            "query": query
+        }
+
     def query(self, query: str) -> str:
         try:
             return self._execute(query)
 
         except Exception as e:
             raise ValueError(f"❌ Error executing query: {e}")
+
+    def query_json(self, query: str) -> dict:
+        """Execute query and return JSON response"""
+        try:
+            return self._execute_json(query)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "query": query,
+                "data": [],
+                "columns": [],
+                "rowCount": 0,
+                "executionTime": 0,
+                "truncated": False
+            }

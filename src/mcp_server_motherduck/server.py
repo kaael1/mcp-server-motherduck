@@ -105,7 +105,11 @@ def build_application(
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "SQL query to execute that is a dialect of DuckDB SQL",
+                            "description": "SQL query to execute that is a dialect of DuckDB SQL. Use {{file}} placeholder for Excel file paths.",
+                        },
+                        "fileId": {
+                            "type": "string",
+                            "description": "Optional file ID for Excel file analysis. If provided, {{file}} will be replaced with the actual file path.",
                         },
                     },
                     "required": ["query"],
@@ -128,8 +132,25 @@ def build_application(
                     return [
                         types.TextContent(type="text", text="Error: No query provided")
                     ]
-                tool_response = db_client.query(arguments["query"])
-                return [types.TextContent(type="text", text=str(tool_response))]
+                
+                query = arguments["query"]
+                file_id = arguments.get("fileId")
+                
+                # Se fileId fornecido, substituir placeholder {{file}} pelo path real
+                if file_id:
+                    import os
+                    excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+                    file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                    query = query.replace("{{file}}", f"'{file_path}'")
+                
+                # Usar query_json para retornar JSON estruturado
+                tool_response = db_client.query_json(query)
+                
+                # Converter dict para JSON string
+                import json
+                response_text = json.dumps(tool_response, indent=2)
+                
+                return [types.TextContent(type="text", text=response_text)]
 
             return [types.TextContent(type="text", text=f"Unsupported tool: {name}")]
 
