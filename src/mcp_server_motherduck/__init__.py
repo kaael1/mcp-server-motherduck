@@ -255,14 +255,15 @@ def main(
         setup_cors(starlette_app, get_allowed_origins())
 
         import uvicorn
-        import os
         
-        # Use PORT environment variable if available, otherwise use provided port
+        # Use PORT environment variable if available (Railway provides this)
         railway_port = os.getenv("PORT")
         if railway_port:
             port = int(railway_port)
             logger.info(f"Using Railway PORT: {port}")
 
+        logger.info(f"Starting server on {SERVER_LOCALHOST}:{port}")
+        
         uvicorn.run(
             starlette_app,
             host=SERVER_LOCALHOST,
