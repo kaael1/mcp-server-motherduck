@@ -262,11 +262,13 @@ def main(
             port = int(railway_port)
             logger.info(f"Using Railway PORT: {port}")
 
-        logger.info(f"Starting server on {SERVER_LOCALHOST}:{port}")
+        # Force 0.0.0.0 for Railway deployment
+        host = "0.0.0.0"
+        logger.info(f"Starting server on {host}:{port}")
         
         uvicorn.run(
             starlette_app,
-            host=SERVER_LOCALHOST,
+            host=host,
             port=port,
             log_config=UVICORN_LOGGING_CONFIG,
         )

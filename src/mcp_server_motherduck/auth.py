@@ -61,6 +61,10 @@ def setup_cors(app, allowed_origins: Optional[str] = None):
             "http://localhost:3010"
         ]
     
+    # Sempre adicionar localhost:3010 para testes
+    if "http://localhost:3010" not in origins:
+        origins.append("http://localhost:3010")
+    
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
