@@ -76,6 +76,14 @@ class DatabaseClient:
                     pass  # Extension might already be installed
                 conn.execute("LOAD httpfs;")
             
+            # Install and load the excel extension for reading .xlsx files
+            with redirect_stdout(null_file), redirect_stderr(null_file):
+                try:
+                    conn.execute("INSTALL excel;")
+                except:
+                    pass  # Extension might already be installed
+                conn.execute("LOAD excel;")
+            
             # Configure S3 credentials from environment variables using CREATE SECRET
             aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
             aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -124,6 +132,18 @@ class DatabaseClient:
             config={"custom_user_agent": f"mcp-server-motherduck/{SERVER_VERSION}"},
             read_only=self._read_only,
         )
+        
+        # Install and load the excel extension for reading .xlsx files
+        import io
+        from contextlib import redirect_stdout, redirect_stderr
+        
+        null_file = io.StringIO()
+        with redirect_stdout(null_file), redirect_stderr(null_file):
+            try:
+                conn.execute("INSTALL excel;")
+            except:
+                pass  # Extension might already be installed
+            conn.execute("LOAD excel;")
 
         logger.info(f"✅ Successfully connected to {self.db_type} database")
 
