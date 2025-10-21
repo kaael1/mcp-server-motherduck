@@ -136,15 +136,38 @@ def build_application(
                 query = arguments["query"]
                 file_id = arguments.get("fileId")
                 
+                # LOG ADICIONADO
+                logger.info(f"📝 Original query: {query}")
+                logger.info(f"📁 File ID: {file_id}")
+                
                 # Se fileId fornecido, substituir placeholder {{file}} pelo path real
                 if file_id:
                     import os
                     excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
                     file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                    
+                    # LOG ADICIONADO - Verificar se arquivo existe
+                    if not os.path.exists(file_path):
+                        logger.error(f"❌ File not found: {file_path}")
+                        error_response = {
+                            "success": False,
+                            "error": f"File not found: {file_id}",
+                            "query": query,
+                            "data": [],
+                            "columns": [],
+                            "rowCount": 0
+                        }
+                        return [types.TextContent(type="text", text=json.dumps(error_response))]
+                    
                     query = query.replace("{{file}}", f"'{file_path}'")
+                    logger.info(f"✏️ Modified query: {query}")
+                    logger.info(f"📂 File path: {file_path}")
                 
                 # Usar query_json para retornar JSON estruturado
                 tool_response = db_client.query_json(query)
+                
+                # LOG ADICIONADO
+                logger.info(f"✅ Query executed: {tool_response.get('rowCount', 0)} rows")
                 
                 # Converter dict para JSON string
                 import json
@@ -155,7 +178,7 @@ def build_application(
             return [types.TextContent(type="text", text=f"Unsupported tool: {name}")]
 
         except Exception as e:
-            logger.error(f"Error executing tool {name}: {e}")
+            logger.error(f"❌ Error executing tool {name}: {e}", exc_info=True)
             raise ValueError(f"Error executing tool {name}: {str(e)}")
 
     initialization_options = InitializationOptions(

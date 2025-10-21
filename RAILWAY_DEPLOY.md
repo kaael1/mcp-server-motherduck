@@ -32,7 +32,7 @@ MAX_FILE_SIZE=52428800
 ### 4. Deploy Automático
 - Railway detectará automaticamente o `railway.json`
 - Fará o build usando Nixpacks
-- Deployará com: `uvx mcp-server-motherduck --transport stream --port $PORT --db-path :memory:`
+- Deployará com: `uvx mcp-server-motherduck --transport stream --port $PORT --db-path :memory: --json-response`
 
 ## 🧪 Testes Pós-Deploy
 

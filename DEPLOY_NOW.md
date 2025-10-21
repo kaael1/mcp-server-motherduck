@@ -24,7 +24,7 @@ MAX_FILE_SIZE=52428800
 ### 4. Deploy Automático
 - Railway detectará automaticamente o `railway.json`
 - Build será feito com Nixpacks
-- Deploy com DuckDB em memória
+- Deploy com DuckDB em memória e respostas JSON
 
 ### 5. Obter URL
 - Após deploy, vá em **"Settings"** → **"Networking"**
