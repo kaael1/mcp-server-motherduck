@@ -25,7 +25,7 @@ AUTH_TOKEN=450c981e114c3073b6cdf07ece0c27982c0a39c267e4339524b40e2a288bfe57
 
 # Opcionais (com defaults)
 ALLOWED_ORIGINS=https://quati.ai,https://*.vercel.app
-EXCEL_FILES_PATH=/tmp/excel_files
+EXCEL_FILES_PATH=/app/excel_files
 MAX_FILE_SIZE=52428800
 ```
 

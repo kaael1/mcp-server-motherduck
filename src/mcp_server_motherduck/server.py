@@ -143,12 +143,28 @@ def build_application(
                 # Se fileId fornecido, substituir placeholder {{file}} pelo path real
                 if file_id:
                     import os
-                    excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+                    # Use /app/excel_files for Railway persistence instead of /tmp
+                    excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
                     file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                    # Convert to absolute path for DuckDB compatibility
+                    file_path = os.path.abspath(file_path)
+                    # Normalize path separators for DuckDB compatibility
+                    file_path = file_path.replace("\\", "/")
                     
                     # LOG ADICIONADO - Verificar se arquivo existe
+                    logger.info(f"📂 Checking file path: {file_path}")
+                    logger.info(f"📂 Directory exists: {os.path.exists(excel_files_path)}")
+                    logger.info(f"📂 File exists: {os.path.exists(file_path)}")
+                    
                     if not os.path.exists(file_path):
                         logger.error(f"❌ File not found: {file_path}")
+                        # List files in directory for debug
+                        try:
+                            files_in_dir = os.listdir(excel_files_path)
+                            logger.error(f"📂 Files in directory: {files_in_dir}")
+                        except Exception as e:
+                            logger.error(f"📂 Cannot list directory: {e}")
+                        
                         error_response = {
                             "success": False,
                             "error": f"File not found: {file_id}",

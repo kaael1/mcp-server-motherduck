@@ -175,11 +175,19 @@ def main(
                 file_id = str(uuid.uuid4())
                 
                 # Create directory if it doesn't exist
-                excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+                # Use /app/excel_files for Railway persistence instead of /tmp
+                excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
                 os.makedirs(excel_files_path, exist_ok=True)
+                
+                # Log directory creation for debug
+                logger.info(f"📁 Excel files directory: {excel_files_path}")
+                logger.info(f"📁 Directory exists: {os.path.exists(excel_files_path)}")
+                logger.info(f"📁 Directory writable: {os.access(excel_files_path, os.W_OK)}")
                 
                 # Save file
                 file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                # Normalize path separators for DuckDB compatibility
+                file_path = file_path.replace("\\", "/")
                 with open(file_path, "wb") as f:
                     f.write(content)
                 
