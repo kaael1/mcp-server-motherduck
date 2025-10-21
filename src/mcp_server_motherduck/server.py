@@ -173,9 +173,11 @@ def build_application(
                         }
                         return [types.TextContent(type="text", text=json.dumps(error_response))]
                     
-                    # Use only double quotes for DuckDB
+                    # Use double quotes for DuckDB, handle both single and double quote patterns
                     normalized_path = file_path.replace("\\", "/")  # Use forward slashes for DuckDB
-                    query = query.replace("{{file}}", normalized_path)
+                    # Replace both '{{file}}' and "{{file}}" patterns
+                    query = query.replace("'{{file}}'", f'"{normalized_path}"')
+                    query = query.replace('"{{file}}"', f'"{normalized_path}"')
                     logger.info(f"✏️ Modified query: {query}")
                     logger.info(f"📂 File path: {file_path}")
                 
