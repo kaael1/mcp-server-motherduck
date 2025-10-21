@@ -175,7 +175,8 @@ def build_application(
                         }
                         return [types.TextContent(type="text", text=json.dumps(error_response))]
                     
-                    query = query.replace("{{file}}", f"'{file_path}'")
+                    # Use double quotes to avoid DuckDB interpreting hyphens as operators
+                    query = query.replace("{{file}}", f'"{file_path}"')
                     logger.info(f"✏️ Modified query: {query}")
                     logger.info(f"📂 File path: {file_path}")
                 

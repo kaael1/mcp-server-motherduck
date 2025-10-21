@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "query",
+    "arguments": {
+      "query": "SELECT * FROM read_xlsx('{{file}}') LIMIT 5",
+      "fileId": "9814c4b6-f73b-4106-ace8-ea8a81bf38a8"
+    }
+  }
+}
