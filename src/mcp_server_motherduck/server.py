@@ -146,8 +146,6 @@ def build_application(
                     # Use /app/excel_files for Railway persistence instead of /tmp
                     excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
                     file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
-                    # Convert to absolute path for DuckDB compatibility
-                    file_path = os.path.abspath(file_path)
                     # Normalize path separators for DuckDB compatibility
                     file_path = file_path.replace("\\", "/")
                     
@@ -175,8 +173,9 @@ def build_application(
                         }
                         return [types.TextContent(type="text", text=json.dumps(error_response))]
                     
-                    # Use double quotes to avoid DuckDB interpreting hyphens as operators
-                    query = query.replace("{{file}}", f'"{file_path}"')
+                    # Use only double quotes for DuckDB
+                    normalized_path = file_path.replace("\\", "/")  # Use forward slashes for DuckDB
+                    query = query.replace("{{file}}", normalized_path)
                     logger.info(f"✏️ Modified query: {query}")
                     logger.info(f"📂 File path: {file_path}")
                 
