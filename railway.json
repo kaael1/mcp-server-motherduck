@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "uv --directory /app run mcp-server-motherduck --transport stream --port ${PORT:-8080} --db-path :memory: --json-response",
+    "startCommand": "uv --directory /app run mcp-server-motherduck --transport stream --port ${PORT:-8080} --db-path :memory:",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300
   }
