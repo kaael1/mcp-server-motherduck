@@ -128,18 +128,29 @@ def main(
 
         logger.info("MCP server initialized in \033[32mhttp-streamable\033[0m mode")
 
-        # Create the session manager with true stateless mode
+        # Create the session manager with stateless mode disabled
+        logger.info(f"📡 Initializing StreamableHTTPSessionManager (stateless=False)")
         session_manager = StreamableHTTPSessionManager(
             app=app,
             event_store=None,
             json_response=json_response,
-            stateless=True,
+            stateless=False,
         )
+        logger.info("✅ StreamableHTTPSessionManager initialized")
 
         async def handle_streamable_http(
             scope: Scope, receive: Receive, send: Send
         ) -> None:
-            await session_manager.handle_request(scope, receive, send)
+            try:
+                logger.info(f"🔍 HTTP Request: {scope.get('method')} {scope.get('path')}")
+                await session_manager.handle_request(scope, receive, send)
+                logger.info("✅ HTTP Request completed")
+            except Exception as e:
+                logger.error(f"❌ HTTP Request failed: {type(e).__name__}: {str(e)}")
+                logger.error(f"❌ Request details: method={scope.get('method')}, path={scope.get('path')}")
+                import traceback
+                logger.error(f"❌ Traceback: {traceback.format_exc()}")
+                raise
 
         # Health check endpoint (no authentication required)
         async def health_check(request):
@@ -212,7 +223,7 @@ def main(
             if not file_id:
                 raise HTTPException(status_code=400, detail="File ID is required")
             
-            excel_files_path = os.getenv("EXCEL_FILES_PATH", "/tmp/excel_files")
+            excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
             file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
             
             if not os.path.exists(file_path):
@@ -256,7 +267,7 @@ def main(
         try:
             auth_token = get_auth_token()
             starlette_app.add_middleware(AuthMiddleware, auth_token=auth_token)
-            logger.info("Authentication middleware configured")
+            logger.info("✅ Authentication middleware configured")
         except ValueError as e:
             logger.warning(f"Authentication not configured: {e}")
         

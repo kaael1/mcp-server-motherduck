@@ -1,4 +1,6 @@
 import logging
+import json
+import os
 from pydantic import AnyUrl
 from typing import Literal
 import mcp.types as types
@@ -125,7 +127,7 @@ def build_application(
         Handle tool execution requests.
         Tools can modify server state and notify clients of changes.
         """
-        logger.info(f"Calling tool: {name}::{arguments}")
+        logger.info(f"🔧 Tool received: {name}")
         try:
             if name == "query":
                 if arguments is None:
@@ -136,27 +138,17 @@ def build_application(
                 query = arguments["query"]
                 file_id = arguments.get("fileId")
                 
-                # LOG ADICIONADO
-                logger.info(f"📝 Original query: {query}")
-                logger.info(f"📁 File ID: {file_id}")
                 
                 # Se fileId fornecido, substituir placeholder {{file}} pelo path real
                 if file_id:
-                    import os
                     # Use /app/excel_files for Railway persistence instead of /tmp
                     excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
                     file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
-                    # Normalize path separators for DuckDB compatibility
+                    # Normalize path separators for DuckDB compatibility (only once)
                     file_path = file_path.replace("\\", "/")
-                    
-                    # LOG ADICIONADO - Verificar se arquivo existe
-                    logger.info(f"📂 Checking file path: {file_path}")
-                    logger.info(f"📂 Directory exists: {os.path.exists(excel_files_path)}")
-                    logger.info(f"📂 File exists: {os.path.exists(file_path)}")
                     
                     if not os.path.exists(file_path):
                         logger.error(f"❌ File not found: {file_path}")
-                        # List files in directory for debug
                         try:
                             files_in_dir = os.listdir(excel_files_path)
                             logger.error(f"📂 Files in directory: {files_in_dir}")
@@ -173,22 +165,16 @@ def build_application(
                         }
                         return [types.TextContent(type="text", text=json.dumps(error_response))]
                     
-                    # Use double quotes for DuckDB, handle both single and double quote patterns
-                    normalized_path = file_path.replace("\\", "/")  # Use forward slashes for DuckDB
-                    # Replace both '{{file}}' and "{{file}}" patterns
-                    query = query.replace("'{{file}}'", f'"{normalized_path}"')
-                    query = query.replace('"{{file}}"', f'"{normalized_path}"')
-                    logger.info(f"✏️ Modified query: {query}")
-                    logger.info(f"📂 File path: {file_path}")
+                    # Replace {{file}} placeholder (simpler approach)
+                    query = query.replace("{{file}}", file_path)
+                    logger.info(f"📁 Executing query with file: {file_path}")
                 
                 # Usar query_json para retornar JSON estruturado
                 tool_response = db_client.query_json(query)
                 
-                # LOG ADICIONADO
                 logger.info(f"✅ Query executed: {tool_response.get('rowCount', 0)} rows")
                 
                 # Converter dict para JSON string
-                import json
                 response_text = json.dumps(tool_response, indent=2)
                 
                 return [types.TextContent(type="text", text=response_text)]
