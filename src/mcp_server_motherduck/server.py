@@ -107,14 +107,42 @@ def build_application(
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "SQL query to execute that is a dialect of DuckDB SQL. Use {{file}} placeholder for Excel file paths.",
+                            "description": "SQL query to execute that is a dialect of DuckDB SQL. Use {{file}} or sheet name directly in FROM clause.",
                         },
                         "fileId": {
                             "type": "string",
-                            "description": "Optional file ID for Excel file analysis. If provided, {{file}} will be replaced with the actual file path.",
+                            "description": "Optional file ID for Excel file analysis.",
+                        },
+                        "sheet": {
+                            "type": "string",
+                            "description": "Optional sheet name for Excel files. If not provided, uses first sheet.",
                         },
                     },
                     "required": ["query"],
+                },
+            ),
+            types.Tool(
+                name="discover_structure",
+                description="Discover schema and structure of Excel sheets with sample data",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "fileId": {
+                            "type": "string",
+                            "description": "File ID of the uploaded Excel file",
+                        },
+                        "sheet": {
+                            "type": "string",
+                            "description": "Sheet name to analyze, or '*' for all sheets",
+                            "default": "*",
+                        },
+                        "sampleRows": {
+                            "type": "integer",
+                            "description": "Number of sample rows to return",
+                            "default": 5,
+                        },
+                    },
+                    "required": ["fileId"],
                 },
             ),
         ]
@@ -137,14 +165,12 @@ def build_application(
                 
                 query = arguments["query"]
                 file_id = arguments.get("fileId")
+                sheet = arguments.get("sheet")
                 
-                
-                # Se fileId fornecido, substituir placeholder {{file}} pelo path real
+                # Se fileId fornecido, substituir placeholder
                 if file_id:
-                    # Use /app/excel_files for Railway persistence instead of /tmp
                     excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
                     file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
-                    # Normalize path separators for DuckDB compatibility (only once)
                     file_path = file_path.replace("\\", "/")
                     
                     if not os.path.exists(file_path):
@@ -165,11 +191,21 @@ def build_application(
                         }
                         return [types.TextContent(type="text", text=json.dumps(error_response))]
                     
-                    # Replace {{file}} placeholder (simpler approach)
-                    query = query.replace("{{file}}", file_path)
+                    # Se sheet especificada, construir query read_xlsx completa
+                    if sheet:
+                        # Substituir "FROM sheet_name" por read_xlsx call
+                        import re
+                        pattern = rf'FROM\s+["\']?{re.escape(sheet)}["\']?'
+                        replacement = f"FROM read_xlsx('{file_path}', sheet='{sheet}', all_varchar=true, ignore_errors=true)"
+                        query = re.sub(pattern, replacement, query, flags=re.IGNORECASE)
+                        logger.info(f"📊 Executing query with sheet: {sheet}")
+                    else:
+                        # Substituir {{file}} placeholder
+                        query = query.replace("{{file}}", file_path)
+                    
                     logger.info(f"📁 Executing query with file: {file_path}")
                 
-                # Usar query_json para retornar JSON estruturado
+                # Executar query
                 tool_response = db_client.query_json(query)
                 
                 logger.info(f"✅ Query executed: {tool_response.get('rowCount', 0)} rows")
@@ -177,6 +213,28 @@ def build_application(
                 # Converter dict para JSON string
                 response_text = json.dumps(tool_response, indent=2)
                 
+                return [types.TextContent(type="text", text=response_text)]
+
+            elif name == "discover_structure":
+                if arguments is None:
+                    return [types.TextContent(type="text", text="Error: No fileId provided")]
+                
+                file_id = arguments.get("fileId")
+                sheet = arguments.get("sheet", "*")
+                sample_rows = arguments.get("sampleRows", 5)
+                
+                if not file_id:
+                    return [types.TextContent(type="text", text="Error: fileId is required")]
+                
+                excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
+                file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+                file_path = file_path.replace("\\", "/")
+                
+                logger.info(f"🔍 Discovering structure for file: {file_id}, sheet: {sheet}")
+                
+                result = db_client.discover_excel_structure(file_path, sheet, sample_rows)
+                
+                response_text = json.dumps(result, indent=2)
                 return [types.TextContent(type="text", text=response_text)]
 
             return [types.TextContent(type="text", text=f"Unsupported tool: {name}")]

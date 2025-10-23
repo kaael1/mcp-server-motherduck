@@ -274,3 +274,134 @@ class DatabaseClient:
                 "executionTime": 0,
                 "truncated": False
             }
+
+    def discover_excel_structure(self, file_path: str, sheet_filter: str = "*", sample_rows: int = 5) -> dict:
+        """Discover structure of Excel sheets with schema and sample data"""
+        try:
+            import openpyxl
+            
+            # Verificar se arquivo existe
+            if not os.path.exists(file_path):
+                return {
+                    "success": False,
+                    "error": f"File not found: {file_path}",
+                    "sheets": {}
+                }
+            
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            
+            # Determinar quais sheets analisar
+            if sheet_filter == "*":
+                target_sheets = wb.sheetnames
+            else:
+                target_sheets = [sheet_filter] if sheet_filter in wb.sheetnames else []
+            
+            if not target_sheets:
+                wb.close()
+                return {
+                    "success": False,
+                    "error": f"Sheet '{sheet_filter}' not found",
+                    "availableSheets": wb.sheetnames,
+                    "sheets": {}
+                }
+            
+            sheets_data = {}
+            
+            for sheet_name in target_sheets:
+                try:
+                    # Usar DuckDB para análise eficiente
+                    query = f"""
+                    SELECT * 
+                    FROM read_xlsx('{file_path}', 
+                                  sheet='{sheet_name}', 
+                                  all_varchar=true, 
+                                  ignore_errors=true) 
+                    LIMIT {sample_rows}
+                    """
+                    
+                    sample_result = self._execute_json(query)
+                    
+                    if not sample_result.get("success"):
+                        sheets_data[sheet_name] = {
+                            "error": sample_result.get("error"),
+                            "columns": [],
+                            "rowCount": 0,
+                            "sampleData": []
+                        }
+                        continue
+                    
+                    sample_data = sample_result.get("data", [])
+                    columns = sample_result.get("columns", [])
+                    
+                    # Análise de colunas
+                    columns_info = []
+                    for col in columns:
+                        col_values = [row.get(col) for row in sample_data if row.get(col) is not None]
+                        
+                        columns_info.append({
+                            "name": col,
+                            "type": self._infer_column_type(col_values),
+                            "distinctCount": len(set(str(v) for v in col_values)),
+                            "nonNullCount": len(col_values)
+                        })
+                    
+                    # Obter total de linhas (sem limite)
+                    count_query = f"""
+                    SELECT COUNT(*) as total
+                    FROM read_xlsx('{file_path}', 
+                                  sheet='{sheet_name}', 
+                                  all_varchar=true, 
+                                  ignore_errors=true)
+                    """
+                    count_result = self._execute_json(count_query)
+                    total_rows = count_result.get("data", [{}])[0].get("total", 0) if count_result.get("success") else 0
+                    
+                    sheets_data[sheet_name] = {
+                        "columns": columns_info,
+                        "rowCount": total_rows,
+                        "sampleData": sample_data
+                    }
+                    
+                except Exception as e:
+                    logger.error(f"Error analyzing sheet {sheet_name}: {e}")
+                    sheets_data[sheet_name] = {
+                        "error": str(e),
+                        "columns": [],
+                        "rowCount": 0,
+                        "sampleData": []
+                    }
+            
+            wb.close()
+            
+            return {
+                "success": True,
+                "fileId": os.path.basename(file_path).replace(".xlsx", ""),
+                "sheets": sheets_data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error discovering Excel structure: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "sheets": {}
+            }
+
+    def _infer_column_type(self, values: list) -> str:
+        """Infer data type from sample values"""
+        if not values:
+            return "VARCHAR"
+        
+        # Tentar inferir tipo baseado nos valores
+        try:
+            # Verificar se todos são números
+            numeric_count = sum(1 for v in values if str(v).replace('.', '', 1).replace('-', '', 1).isdigit())
+            if numeric_count == len(values):
+                # Verificar se tem pontos decimais
+                if any('.' in str(v) for v in values):
+                    return "DOUBLE"
+                return "INTEGER"
+        except:
+            pass
+        
+        return "VARCHAR"

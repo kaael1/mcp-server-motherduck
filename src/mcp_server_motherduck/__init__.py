@@ -235,6 +235,51 @@ def main(
                 filename=f"result_{file_id}.xlsx"
             )
 
+        # List sheets in Excel file endpoint
+        async def list_sheets(request):
+            file_id = request.path_params.get("file_id")
+            if not file_id:
+                raise HTTPException(status_code=400, detail="File ID is required")
+            
+            excel_files_path = os.getenv("EXCEL_FILES_PATH", "/app/excel_files")
+            file_path = os.path.join(excel_files_path, f"{file_id}.xlsx")
+            
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+            
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+                
+                sheets = []
+                total_rows = 0
+                
+                for idx, sheet_name in enumerate(wb.sheetnames):
+                    ws = wb[sheet_name]
+                    row_count = ws.max_row
+                    col_count = ws.max_column
+                    
+                    sheets.append({
+                        "name": sheet_name,
+                        "index": idx,
+                        "rowCount": row_count,
+                        "columnCount": col_count
+                    })
+                    total_rows += row_count
+                
+                wb.close()
+                
+                return JSONResponse({
+                    "success": True,
+                    "fileId": file_id,
+                    "sheets": sheets,
+                    "totalSheets": len(sheets),
+                    "totalRows": total_rows
+                })
+            except Exception as e:
+                logger.error(f"Error listing sheets: {e}")
+                raise HTTPException(status_code=500, detail=f"Failed to list sheets: {str(e)}")
+
         @contextlib.asynccontextmanager
         async def lifespan(app: Starlette) -> AsyncIterator[None]:
             """Context manager for session manager."""
@@ -258,6 +303,7 @@ def main(
                 Route("/health", endpoint=health_check, methods=["GET"]),
                 Route("/upload", endpoint=upload_excel, methods=["POST"]),
                 Route("/download/{file_id:str}", endpoint=download_excel, methods=["GET"]),
+                Route("/files/{file_id:str}/sheets", endpoint=list_sheets, methods=["GET"]),
                 Mount("/mcp", app=handle_streamable_http),
             ],
             lifespan=lifespan,
